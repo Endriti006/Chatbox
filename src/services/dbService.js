@@ -1,13 +1,7 @@
 const { Client } = require('pg');
-const testStore = require('./testStore');
+const enhancedTestStore = require('./enhancedTestStore');
 
-// Initialize test data by default in development
-if (process.env.NODE_ENV !== 'production') {
-  testStore.initializeTestData('test-user-123');
-}
-
-// Lazy Postgres client. This prevents the module from throwing at import time when the
-// DATABASE_URL isn't set or Postgres isn't available (useful for local development).
+// Lazy Postgres client
 let client = null;
 let triedConnect = false;
 let usingTestStore = process.env.NODE_ENV !== 'production';
@@ -16,7 +10,6 @@ async function ensureClient() {
   if (client) return client;
   const connStr = process.env.DATABASE_URL;
   if (!connStr) {
-    // No database configured; use test store
     console.log('No database configured, using in-memory test store');
     usingTestStore = true;
     return null;
@@ -27,7 +20,6 @@ async function ensureClient() {
     await client.connect();
     return client;
   } catch (err) {
-    // Don't throw on import; log and return null so callers can fallback gracefully.
     console.error('Postgres connection error:', err.message);
     console.log('Falling back to in-memory test store');
     client = null;
@@ -50,25 +42,86 @@ function getOpenAI() {
 
 /**
  * getRelevantChunks - Retrieve top-N most relevant document chunks for a user
- * Uses pgvector for similarity search on embeddings.
- * Falls back to basic text search if vector search is not available.
- * If no database is available, uses in-memory test store.
+ * Uses enhanced test store with business-specific data in development
  */
 async function getRelevantChunks(userId, queryText, limit = 5) {
   const cli = await ensureClient();
+  
   if (!cli) {
     if (usingTestStore) {
-      // Simple relevance matching for test data
-      const documents = testStore.getDocuments(userId);
-      return documents.filter(doc => 
-        doc.toLowerCase().includes(queryText.toLowerCase())
-      ).slice(0, limit);
+      // Use enhanced test store with business-specific context
+      const documents = enhancedTestStore.getDocuments(userId);
+      
+      if (documents && documents.length > 0) {
+        console.log(`📚 Using enhanced test store for ${userId}: ${documents.length} documents found`);
+        
+        // Enhanced relevance matching with better keyword detection
+        const queryLower = queryText.toLowerCase();
+        const keywords = queryLower.split(' ').filter(w => w.length > 2);
+        
+        // Define topic-specific keywords
+        const topicKeywords = {
+          hours: ['hour', 'open', 'close', 'time', 'when', 'schedule'],
+          contact: ['contact', 'phone', 'email', 'call', 'reach', 'address'],
+          price: ['price', 'cost', 'much', 'fee', 'rate', 'membership', 'dollar'],
+          services: ['service', 'offer', 'provide', 'do', 'specialize', 'include']
+        };
+        
+        const scoredDocs = documents.map(doc => {
+          const docLower = doc.toLowerCase();
+          let score = 0;
+          
+          // Score based on direct keyword matches
+          keywords.forEach(keyword => {
+            if (docLower.includes(keyword)) {
+              score += 3;
+            }
+          });
+          
+          // Boost score for topic relevance
+          Object.entries(topicKeywords).forEach(([topic, words]) => {
+            const queryHasTopic = words.some(w => queryLower.includes(w));
+            const docHasTopic = words.some(w => docLower.includes(w));
+            
+            if (queryHasTopic && docHasTopic) {
+              score += 5;
+            }
+          });
+          
+          // Boost for exact phrase match
+          if (docLower.includes(queryLower)) {
+            score += 10;
+          }
+          
+          return { doc, score };
+        });
+        
+        // Sort by score
+        const sortedDocs = scoredDocs.sort((a, b) => b.score - a.score);
+        
+        // Return top scored documents, or all if no good matches
+        const topDocs = sortedDocs
+          .filter(item => item.score > 0)
+          .slice(0, limit)
+          .map(item => item.doc);
+        
+        if (topDocs.length === 0) {
+          console.log('⚠️  No keyword matches, returning all documents');
+          return documents;
+        }
+        
+        console.log(`✅ Returning ${topDocs.length} relevant documents (scores: ${sortedDocs.slice(0, limit).map(d => d.score).join(', ')})`);
+        return topDocs;
+      }
+      
+      console.log('⚠️  No documents found for user, returning empty array');
+      return [];
     }
     return [];
   }
 
+  // Database implementation (PostgreSQL with pgvector)
   try {
-    // Try to get embedding for query
     let queryEmbedding = null;
     const oai = getOpenAI();
     if (oai) {
@@ -102,7 +155,6 @@ async function getRelevantChunks(userId, queryText, limit = 5) {
         ORDER BY similarity DESC
         LIMIT $3
       `;
-      // Convert query to tsquery format (replace spaces with &)
       const tsQuery = queryText.split(' ').filter(Boolean).join(' & ');
       params = [tsQuery, userId, limit];
     }
@@ -116,13 +168,13 @@ async function getRelevantChunks(userId, queryText, limit = 5) {
 }
 
 /**
- * saveChat - optional helper to persist chats. Uses test store if no database.
+ * saveChat - optional helper to persist chats
  */
 async function saveChat({ userId, question, answer }) {
   const cli = await ensureClient();
   if (!cli) {
     if (usingTestStore) {
-      testStore.storeChat(userId, question, answer);
+      enhancedTestStore.storeChat(userId, question, answer);
       return;
     }
     return null;

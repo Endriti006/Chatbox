@@ -8,7 +8,9 @@
     "dev": "nodemon src/index.js",
     "train": "node scripts/trainSite.js",
     "migrate": "node migrations/run.js",
-    "test:chat": "node scripts/testChatbot.js"
+    "test:chat": "node scripts/testChatbot.js",
+    "test:full": "node scripts/fullTest.js",
+    "setup": "node scripts/setup.js"
   },
   "engines": {
     "node": ">=18"
