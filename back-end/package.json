@@ -1,0 +1,42 @@
+{
+  "name": "chatbox-backend",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "train": "node scripts/trainSite.js",
+    "migrate": "node migrations/run.js",
+    "test:chat": "node scripts/testChatbot.js",
+    "test:full": "node scripts/fullTest.js",
+    "setup": "node scripts/setup.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@google/genai": "^1.23.0",
+    "@google/generative-ai": "^0.24.1",
+    "@mistralai/mistralai": "^1.10.0",
+    "@supabase/supabase-js": "^2.75.0",
+    "axios": "^1.12.2",
+    "body-parser": "^1.20.2",
+    "cheerio": "^1.1.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.18.2",
+    "groq-sdk": "^0.33.0",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.12.0",
+    "pg": "^8.11.0",
+    "puppeteer": "^24.25.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "stripe": "^12.12.0",
+    "supabase": "^1.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
